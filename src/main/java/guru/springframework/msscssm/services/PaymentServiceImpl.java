@@ -12,6 +12,8 @@ import org.springframework.statemachine.config.StateMachineFactory;
 import org.springframework.statemachine.support.DefaultStateMachineContext;
 import org.springframework.stereotype.Service;
 
+import javax.transaction.Transactional;
+
 /**
  * Created by Jiang Wensi on 9/11/2020
  */
@@ -30,28 +32,31 @@ public class PaymentServiceImpl implements PaymentService {
         return paymentRepository.save(payment);
     }
 
+    @Transactional
     @Override
     public StateMachine<PaymentState, PaymentEvent> preAuth(Long paymentId) {
         StateMachine<PaymentState, PaymentEvent> sm = build(paymentId);
-        sendEvent(paymentId, sm, PaymentEvent.PRE_AUTHORIZE);
-        return null;
+        sendEvent(paymentId, sm, PaymentEvent.PRE_AUTH_APPROVED);
+        return sm;
     }
 
+    @Transactional
     @Override
     public StateMachine<PaymentState, PaymentEvent> authorizePayment(Long paymentId) {
         StateMachine<PaymentState, PaymentEvent> sm = build(paymentId);
         sendEvent(paymentId, sm, PaymentEvent.AUTH_APPROVED);
-        return null;
+        return sm;
     }
 
+    @Transactional
     @Override
     public StateMachine<PaymentState, PaymentEvent> declineAuth(Long paymentId) {
         StateMachine<PaymentState, PaymentEvent> sm = build(paymentId);
-        sendEvent(paymentId, sm, PaymentEvent.PRE_AUTH_DECLINED);
-        return null;
+        sendEvent(paymentId, sm, PaymentEvent.AUTH_DECLINED);
+        return sm;
     }
 
-    private void sendEvent(Long paymentId, StateMachine<PaymentState, PaymentEvent> sm, PaymentEvent event){
+    private void sendEvent(Long paymentId, StateMachine<PaymentState, PaymentEvent> sm, PaymentEvent event) {
         Message msg = MessageBuilder
                 .withPayload(event)
                 .setHeader(PAYMENT_ID_HEADER, paymentId)
@@ -62,19 +67,13 @@ public class PaymentServiceImpl implements PaymentService {
 
     private StateMachine<PaymentState, PaymentEvent> build(Long paymentId) {
         Payment payment = paymentRepository.getOne(paymentId);
-
         StateMachine<PaymentState, PaymentEvent> sm = stateMachineFactory.getStateMachine(Long.toString(payment.getId()));
-
         sm.stop();
-
-        sm.getStateMachineAccessor()
-                .doWithAllRegions(sma -> {
-                    sma.addStateMachineInterceptor(paymentStateChangeInterceptor);
-                    sma.resetStateMachine(new DefaultStateMachineContext<>(payment.getState(),null, null, null));
-                });
-
+        sm.getStateMachineAccessor().doWithAllRegions(sma -> {
+            sma.addStateMachineInterceptor(paymentStateChangeInterceptor);
+            sma.resetStateMachine(new DefaultStateMachineContext<>(payment.getState(), null, null, null));
+        });
         sm.start();
-
         return sm;
     }
 }
