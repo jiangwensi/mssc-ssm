@@ -1,8 +1,11 @@
 package guru.springframework.msscssm.config;
 
+import guru.springframework.msscssm.actions.*;
 import guru.springframework.msscssm.domain.PaymentEvent;
 import guru.springframework.msscssm.domain.PaymentState;
+import guru.springframework.msscssm.guards.PaymentIdGuard;
 import guru.springframework.msscssm.services.PaymentServiceImpl;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.support.MessageBuilder;
@@ -24,8 +27,17 @@ import java.util.Random;
  */
 @Slf4j
 @EnableStateMachineFactory
+@RequiredArgsConstructor
 @Configuration
 public class StateMachineConfig extends StateMachineConfigurerAdapter<PaymentState, PaymentEvent> {
+
+    private final AuthAction authAction;
+    private final AuthApprovedAction authApprovedAction;
+    private final AuthDeclinedAction authDeclinedAction;
+    private final PreAuthAction preAuthAction;
+    private final PreAuthApprovedAction preAuthApprovedAction;
+    private final PreAuthDeclinedAction preAuthDeclinedAction;
+    private final PaymentIdGuard paymentIdGuard;
 
     @Override
     public void configure(StateMachineStateConfigurer<PaymentState, PaymentEvent> states) throws Exception {
@@ -44,44 +56,48 @@ public class StateMachineConfig extends StateMachineConfigurerAdapter<PaymentSta
                 .source(PaymentState.NEW)
                 .target(PaymentState.NEW)
                 .event(PaymentEvent.PRE_AUTHORIZE)
-                .action(preAuthAction())
-                .guard(paymentIdGuard())
+                .action(preAuthAction)
+                .guard(paymentIdGuard)
 
                 .and()
                 .withExternal()
                 .source(PaymentState.NEW)
                 .target(PaymentState.PRE_AUTH)
                 .event(PaymentEvent.PRE_AUTH_APPROVED)
-                .guard(paymentIdGuard())
+                .action(preAuthApprovedAction)
+                .guard(paymentIdGuard)
 
                 .and()
                 .withExternal()
                 .source(PaymentState.NEW)
                 .target(PaymentState.PRE_AUTH_ERROR)
                 .event(PaymentEvent.PRE_AUTH_DECLINED)
-                .guard(paymentIdGuard())
+                .action(preAuthDeclinedAction)
+                .guard(paymentIdGuard)
 
                 .and()
                 .withExternal()
                 .source(PaymentState.PRE_AUTH)
                 .target(PaymentState.PRE_AUTH)
                 .event(PaymentEvent.AUTHORIZE)
-                .action(authAction())
-                .guard(paymentIdGuard())
+                .action(authAction)
+                .guard(paymentIdGuard)
 
                 .and()
                 .withExternal()
                 .source(PaymentState.PRE_AUTH)
                 .target(PaymentState.AUTH)
                 .event(PaymentEvent.AUTH_APPROVED)
-                .guard(paymentIdGuard())
+                .action(authApprovedAction)
+                .guard(paymentIdGuard)
 
                 .and()
                 .withExternal()
                 .source(PaymentState.PRE_AUTH)
                 .target(PaymentState.AUTH_ERROR)
                 .event(PaymentEvent.AUTH_DECLINED)
-                .guard(paymentIdGuard());
+                .action(authDeclinedAction)
+                .guard(paymentIdGuard);
     }
 
 
